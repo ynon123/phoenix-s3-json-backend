@@ -1,0 +1,30 @@
+{
+  "name": "phoenix-s3-json-backend",
+  "version": "1.0.0",
+  "description": "Small Node.js Lambda-style backend for uploading/downloading JSON to S3",
+  "main": "src/handlers/postJson.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest --runInBand",
+    "upload:local": "node scripts/upload-local.js",
+    "download:local": "node scripts/download-local.js",
+    "deploy:aws": "node scripts/deploy-aws.js",
+    "verify:aws": "node scripts/verify-api.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aws-sdk/client-api-gateway": "^3.884.0",
+    "@aws-sdk/client-iam": "^3.884.0",
+    "@aws-sdk/client-lambda": "^3.884.0",
+    "@aws-sdk/client-s3": "^3.884.0",
+    "@aws-sdk/client-sts": "^3.884.0",
+    "archiver": "^7.0.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "jest": "^30.0.5",
+    "js-yaml": "^4.1.0"
+  }
+}

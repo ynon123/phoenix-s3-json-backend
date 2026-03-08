@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: S3 JSON Backend API
+  version: 1.0.0
+  description: Upload and download JSON documents from S3.
+paths:
+  /json/{key}:
+    post:
+      summary: Upload JSON to S3
+      operationId: postJson
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                  bucket:
+                    type: string
+        '400':
+          description: Invalid request payload
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: arn:aws:apigateway:__AWS_REGION__:lambda:path/2015-03-31/functions/__POST_LAMBDA_ARN__/invocations
+    get:
+      summary: Download JSON from S3
+      operationId: getJson
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Object not found
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: arn:aws:apigateway:__AWS_REGION__:lambda:path/2015-03-31/functions/__GET_LAMBDA_ARN__/invocations
