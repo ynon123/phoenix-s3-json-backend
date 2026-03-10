@@ -1,5 +1,26 @@
 # Phoenix S3 JSON Backend
 
+## Terraform Version
+
+A Terraform-based infrastructure version of this project is available in a separate branch:
+
+**Branch:** `add-terraform`
+
+This branch replaces the custom AWS deployment script with Infrastructure-as-Code using Terraform and includes:
+
+- Terraform-managed AWS resources (S3, Lambda, IAM, API Gateway)
+- automated Lambda packaging
+- Terraform plan/apply workflow
+- the same Stage 1 local S3 functionality
+- the same Lambda handlers and API behavior
+
+The `main` branch keeps the original implementation that deploys infrastructure using a Node.js AWS SDK script (`scripts/deploy-aws.js`), while the Terraform branch demonstrates the same system deployed using modern IaC practices.
+
+To view the Terraform version, switch to the branch:
+
+```bash
+git checkout add-terraform
+```
 ## Project Overview
 
 This project is a small Node.js backend assignment that works with JSON files in AWS S3 and includes OpenAPI-based deployment to AWS.
