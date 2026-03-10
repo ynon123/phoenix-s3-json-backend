@@ -1,114 +1,120 @@
 # Phoenix S3 JSON Backend
 
-## Project Overview
+A small Node.js backend assignment that stores JSON in AWS S3 and exposes upload/download endpoints through Lambda and API Gateway.
 
-This project is a small Node.js backend assignment that works with JSON files in AWS S3 and includes OpenAPI-based deployment to AWS.
+The project supports two stages:
 
-It has two parts:
-
-- Stage 1: local scripts that upload JSON to S3 and download JSON from S3 using the AWS SDK
-- Stage 2: AWS deployment of Lambda handlers and API Gateway using an OpenAPI template
+- Stage 1: local S3 upload/download scripts using the AWS SDK and real AWS credentials
+- Stage 2: Terraform-based AWS infrastructure and deployment for S3, Lambda, IAM, API Gateway, and API verification
 
 ## Project Structure
 
 ```text
 .
+|- data/
+|  |- sample.json
 |- openapi/
 |  |- openapi.yaml
 |- scripts/
 |  |- upload-local.js
 |  |- download-local.js
-|  |- deploy-aws.js
+|  |- package-lambda.js
 |  |- verify-api.js
 |- src/
 |  |- config/
 |  |- handlers/
 |  |- services/
 |  |- utils/
-|- data/
-|  |- sample.json
+|- terraform/
+|  |- .terraform.lock.hcl
+|  |- provider.tf
+|  |- variables.tf
+|  |- main.tf
+|  |- iam.tf
+|  |- lambda.tf
+|  |- api_gateway.tf
+|  |- outputs.tf
+|  |- terraform.tfvars.example
 |- tests/
 |  |- *.test.js
-|- .deploy/                  # generated during deploy
-|  |- openapi.generated.yaml
-|  |- aws-deploy-output.json
+|- .deploy/                  # generated artifacts only
 ```
 
 Key locations:
 
 - Lambda handlers: `src/handlers/postJson.js` and `src/handlers/getJson.js`
-- Local and deployment scripts: `scripts/`
-- OpenAPI template: `openapi/openapi.yaml`
+- Canonical OpenAPI template: `openapi/openapi.yaml`
+- Terraform infrastructure: `terraform/`
+- Local scripts and verification: `scripts/`
 - Unit tests: `tests/`
-- Sample payload for Stage 1: `data/sample.json`
 
 ## Prerequisites
 
 - Node.js 20 or newer
 - An AWS account
-- AWS credentials configured for the AWS SDK
-- AWS CLI installed is optional, but useful for checking credentials with `aws sts get-caller-identity`
+- AWS credentials configured for the AWS SDK and Terraform
+- Terraform installed
+- AWS CLI is optional, but useful for checking credentials with `aws sts get-caller-identity`
 
-## Environment Variables
+## Environment and Configuration
 
-Local development automatically loads `.env` through `src/config/env.js`. Production-style execution still reads from `process.env`.
+Local Stage 1 scripts use `.env` automatically through `src/config/env.js`.
 
-Project variables for Stage 1 local execution:
+Project `.env` variables:
 
 - `AWS_REGION` required
 - `S3_BUCKET` required
 - `S3_PREFIX` optional
 - `AWS_PROFILE` optional
-
-Project variables for Stage 2 deploy:
-
-- `AWS_REGION` optional, defaults to `us-east-1`
-- `S3_BUCKET` optional, auto-generated if empty
-- `S3_PREFIX` optional
-- `AWS_PROFILE` optional
-- `DEPLOY_PREFIX` optional
-- `POST_FUNCTION_NAME` optional
-- `GET_FUNCTION_NAME` optional
-- `LAMBDA_ROLE_NAME` optional
-- `API_NAME` optional
-- `API_STAGE` optional
-- `DEPLOY_S3_BUCKET` optional
-- `LAMBDA_ROLE_ARN` optional
-- `REST_API_ID` optional, forces deploy to update a specific existing API Gateway REST API
-
-Variable used by Stage 2 verification:
-
-- `API_INVOKE_URL` optional, overrides the URL read from `.deploy/aws-deploy-output.json`
+- `API_INVOKE_URL` optional override for `npm run verify:aws`
 
 Example `.env`:
 
 ```env
-AWS_REGION=us-east-1
+AWS_REGION=eu-west-1
 AWS_PROFILE=default
-S3_BUCKET=
-S3_PREFIX=optional/prefix
-DEPLOY_PREFIX=phoenixchallenge
-API_NAME=phoenixchallenge-api
-API_STAGE=prod
-POST_FUNCTION_NAME=phoenixchallenge-post-json
-GET_FUNCTION_NAME=phoenixchallenge-get-json
-LAMBDA_ROLE_NAME=phoenixchallenge-lambda-role
-# DEPLOY_S3_BUCKET=
-# LAMBDA_ROLE_ARN=
-# REST_API_ID=
-# API_INVOKE_URL=
+S3_BUCKET=your-stage1-bucket-name
+S3_PREFIX=
+# API_INVOKE_URL=            # Optional override for npm run verify:aws only.
 ```
 
-AWS credentials can also be provided through the standard AWS SDK credential chain, for example `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`.
+Terraform deployment configuration lives in `terraform/terraform.tfvars`.
+Start from `terraform/terraform.tfvars.example`.
+
+Terraform variables:
+
+- `aws_region` optional, defaults to `eu-west-1`
+- `aws_profile` optional
+- `name_prefix` optional, defaults to `phoenixchallenge`
+- `data_bucket_name` optional, auto-generated if empty
+- `s3_prefix` optional
+- `post_function_name` optional
+- `get_function_name` optional
+- `lambda_role_name` optional
+- `api_name` optional
+- `api_stage` optional, defaults to `prod`
+- `force_destroy_bucket` optional, defaults to `true`
+
+Example `terraform/terraform.tfvars`:
+
+```hcl
+aws_region  = "eu-west-1"
+aws_profile = "default"
+name_prefix = "phoenixchallenge"
+s3_prefix   = ""
+api_stage   = "prod"
+```
+
+AWS credentials may also come from the standard AWS SDK / Terraform credential chain.
 
 ## Stage 1 - Local S3 Scripts
 
-Stage 1 uses the real AWS SDK and your real AWS credentials. The scripts do not mock AWS.
+Stage 1 uses the real AWS SDK and real AWS credentials.
 
 `scripts/upload-local.js`:
 
 - reads a local JSON file
-- validates that the file contains valid JSON
+- validates JSON
 - uploads it to the configured S3 bucket
 
 `scripts/download-local.js`:
@@ -125,10 +131,10 @@ npm run upload:local -- data/sample.json sample.json
 npm run download:local -- sample.json
 ```
 
-Successful output:
+Expected successful output:
 
 - upload prints a line like `Uploaded JSON to s3://your-bucket/sample.json`
-- download prints the JSON document in pretty-printed form
+- download prints the JSON document in pretty JSON format
 
 Common errors:
 
@@ -137,64 +143,54 @@ Common errors:
 - local file not found
 - S3 bucket not found
 - S3 key not found
-- AWS credential or permission errors
+- AWS credential or IAM permission errors
 
-## Stage 2 - AWS Deployment
+## Stage 2 - Terraform Deployment
 
-`scripts/deploy-aws.js` performs the AWS deployment flow. It:
+Terraform is the official infrastructure and deployment path. It creates and manages a fresh Terraform-owned stack.
 
-- packages the Lambda handlers
-- creates or updates the Lambda execution role and policies
-- creates or updates the Lambda functions
-- generates the deployment-specific OpenAPI file
-- uploads the generated OpenAPI file to S3
-- creates or updates API Gateway from OpenAPI
-- deploys an API stage
-- grants API Gateway permission to invoke the Lambda functions
+It manages:
 
-The deployed handlers are:
+- S3 bucket for JSON data
+- IAM role and policies for Lambda
+- Lambda functions for POST and GET
+- API Gateway REST API
+- API deployment and stage
+- Lambda invoke permissions for API Gateway
 
-- `src/handlers/postJson.handler`
-- `src/handlers/getJson.handler`
-
-`scripts/verify-api.js` performs a real API check against the deployed API Gateway endpoint by:
-
-- sending a POST request with a generated JSON payload
-- sending a GET request for the same key
-- printing the status codes and returned bodies
+`scripts/package-lambda.js` prepares `.deploy/lambda.zip`, which Terraform uses for both Lambda functions. `npm run terraform:plan` and `npm run terraform:apply` already run `npm run package:lambda`, so `package:lambda` is only needed when you want to build the Lambda zip manually.
 
 Commands:
 
 ```bash
-npm run deploy:aws
+npm run terraform:init
+npm run terraform:plan
+npm run terraform:apply
 npm run verify:aws
 ```
 
-Successful output:
+Expected successful output:
 
-- deploy prints the Lambda names, generated OpenAPI S3 path, API Gateway ID, and invoke URL
-- verify prints `POST status: 200` and `GET status: 200` plus the returned bodies
+- `terraform:apply` creates or updates the AWS infrastructure and prints Terraform outputs including the API URL
+- `verify:aws` prints `POST status: 200` and `GET status: 200` plus the returned bodies
 
 ## OpenAPI and API Gateway
 
-`openapi/openapi.yaml` is the canonical OpenAPI template committed with the project.
+`openapi/openapi.yaml` is the single canonical OpenAPI template in source control.
 
-During deployment, `scripts/deploy-aws.js` creates `.deploy/openapi.generated.yaml` by replacing these placeholders with real deployment values:
+It contains placeholders for:
 
 - `__AWS_REGION__`
 - `__POST_LAMBDA_ARN__`
 - `__GET_LAMBDA_ARN__`
 
-That generated file is then:
+Terraform renders those placeholders in memory and uses the rendered body to manage API Gateway and upload the deployment artifact to S3.
 
-- uploaded to S3 as a deploy artifact
-- used as the source for API Gateway import or update
-
-The generated file is not a source-of-truth file.
+`.deploy/` is used only for generated artifacts such as Lambda packaging output and an optional cached Terraform output file for `verify:aws`. Terraform state and live `terraform output` remain the source of truth.
 
 ## Tests
 
-Run tests with:
+Run unit tests with:
 
 ```bash
 npm test
@@ -208,22 +204,24 @@ npm test
 - GET handler success, not-found, missing-key, and server-error handling
 - OpenAPI template parsing and route presence
 
-These tests do not call real AWS services.
+These tests do not call real AWS.
 
-`npm run verify:aws` is the real end-to-end AWS verification step.
+`npm run verify:aws` is the real end-to-end verification step after Terraform apply.
 
 ## IAM Permissions
 
-Stage 1 uses your configured AWS credentials, so those credentials must allow access to the chosen S3 bucket.
+Stage 1 uses your AWS credentials directly, so those credentials must allow access to the chosen S3 bucket.
 
-Stage 2 creates or reuses a Lambda execution role with:
+Stage 2 creates a Lambda execution role with:
 
 - CloudWatch logging permissions through `AWSLambdaBasicExecutionRole`
-- S3 permissions needed by the handlers for `ListBucket`, `GetObject`, and `PutObject`
+- S3 permissions for `ListBucket`, `GetObject`, and `PutObject`
+
+Your Terraform runner credentials must also be able to create and update S3, IAM, Lambda, API Gateway, and Lambda permissions resources.
 
 ## Submission Notes
 
-Minimal reviewer flow:
+Reviewer flow:
 
 1. `npm install`
 2. Configure AWS credentials
@@ -231,11 +229,14 @@ Minimal reviewer flow:
    - `npm run upload:local -- data/sample.json sample.json`
    - `npm run download:local -- sample.json`
 4. Stage 2:
-   - `npm run deploy:aws`
+   - `npm run terraform:init`
+   - `npm run terraform:plan`
+   - `npm run terraform:apply`
    - `npm run verify:aws`
 
-What to expect:
+Useful optional checks:
 
-- Stage 1 proves direct S3 upload and download using the AWS SDK
-- Stage 2 proves Lambda and API Gateway deployment using the OpenAPI template
-- `npm test` provides fast mocked unit coverage
+```bash
+npm test
+aws sts get-caller-identity
+```

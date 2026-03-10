@@ -1,7 +1,10 @@
 node_modules/
 coverage/
 .env
-.env.*
 .deploy/
-*.log
-.DS_Store
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.*
+terraform/crash.log
+terraform/terraform.tfvars
+npm-debug.log*

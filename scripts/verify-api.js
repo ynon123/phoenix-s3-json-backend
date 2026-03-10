@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 if (process.env.NODE_ENV !== 'production') {
   try {
@@ -9,21 +10,70 @@ if (process.env.NODE_ENV !== 'production') {
   } catch (_) {}
 }
 
-const OUTPUT_PATH = path.resolve(__dirname, '..', '.deploy', 'aws-deploy-output.json');
+const ROOT_DIR = path.resolve(__dirname, '..');
+const TERRAFORM_OUTPUT_PATH = path.join(ROOT_DIR, '.deploy', 'terraform-output.json');
+
+function readJsonFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function getInvokeUrlFromTerraformOutput(output) {
+  if (!output || !output.api_invoke_url) {
+    return null;
+  }
+
+  return typeof output.api_invoke_url === 'string'
+    ? output.api_invoke_url
+    : output.api_invoke_url.value || null;
+}
+
+function getInvokeUrlFromTerraformCli() {
+  const result = spawnSync('terraform', ['-chdir=terraform', 'output', '-json'], {
+    cwd: ROOT_DIR,
+    encoding: 'utf8',
+    shell: process.platform === 'win32'
+  });
+
+  if (result.status !== 0 || !result.stdout) {
+    return null;
+  }
+
+  const parsed = JSON.parse(result.stdout);
+  const invokeUrl = getInvokeUrlFromTerraformOutput(parsed);
+
+  if (invokeUrl) {
+    fs.mkdirSync(path.dirname(TERRAFORM_OUTPUT_PATH), { recursive: true });
+    fs.writeFileSync(TERRAFORM_OUTPUT_PATH, JSON.stringify(parsed, null, 2));
+  }
+
+  return invokeUrl;
+}
 
 function getInvokeUrl() {
   if (process.env.API_INVOKE_URL) {
     return process.env.API_INVOKE_URL;
   }
 
-  if (fs.existsSync(OUTPUT_PATH)) {
-    const data = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf8'));
-    if (data.apiInvokeUrl) {
-      return data.apiInvokeUrl;
-    }
+  const liveTerraformInvokeUrl = getInvokeUrlFromTerraformCli();
+  if (liveTerraformInvokeUrl) {
+    return liveTerraformInvokeUrl;
   }
 
-  throw new Error('API invoke URL not found. Run npm run deploy:aws first or set API_INVOKE_URL.');
+  const terraformOutput = readJsonFile(TERRAFORM_OUTPUT_PATH);
+  const terraformInvokeUrl = getInvokeUrlFromTerraformOutput(terraformOutput);
+  if (terraformInvokeUrl) {
+    return terraformInvokeUrl;
+  }
+
+  throw new Error('API invoke URL not found. Run npm run terraform:apply first, or set API_INVOKE_URL.');
 }
 
 async function main() {

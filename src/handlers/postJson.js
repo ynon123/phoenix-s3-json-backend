@@ -48,6 +48,6 @@ async function handler(event, context) {
 }
 
 module.exports = {
-  handler,
-  parseJsonBody
+  handler
 };
+

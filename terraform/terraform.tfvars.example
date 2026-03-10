@@ -1,0 +1,12 @@
+aws_region      = "eu-west-1"
+aws_profile     = "default"
+name_prefix     = "phoenixchallenge"
+s3_prefix       = ""
+api_stage       = "prod"
+# data_bucket_name = "your-existing-or-custom-bucket-name"
+# post_function_name = "phoenixchallenge-post-json"
+# get_function_name  = "phoenixchallenge-get-json"
+# lambda_role_name   = "phoenixchallenge-tf-lambda-role"
+# api_name           = "S3 JSON Backend API"
+
+
